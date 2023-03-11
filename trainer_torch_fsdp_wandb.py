@@ -35,7 +35,7 @@ from torch.utils.data import (DataLoader, RandomSampler)
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm, trange
-from transformers import (AutoTokenizer, PreTrainedTokenizer)
+from transformers import (AutoTokenizer, PreTrainedTokenizer, PreTrainedModel)
 
 from general_util.dist_utils import vanilla_torch_dist
 from general_util.evaluator import evaluate_fn as evaluate
@@ -58,9 +58,9 @@ def save_model(model: Union[torch.nn.Module, FullyShardedDataParallel], cfg: Dic
     if cfg.local_rank != -1:
         state_dict = model.state_dict()
         if cfg.local_rank == 0:
-            unwrap_model(model).save_pretrained(output_dir, state_dict=state_dict)
+            torch.save(state_dict, os.path.join(output_dir, "pytorch_model.bin"))
     else:
-        model.save_pretrained(output_dir)
+        torch.save(model.state_dict(), os.path.join(output_dir, "pytorch_model.bin"))
 
     # Save tokenizer and training args.
     if cfg.local_rank in [-1, 0]:
@@ -265,7 +265,8 @@ def train(cfg, train_dataset, model, tokenizer, continue_from_global_step=0):
                                 else:
                                     model.save_pretrained(cfg.output_dir)
 
-                                tokenizer.save_pretrained(cfg.output_dir)
+                                if tokenizer is not None:
+                                    tokenizer.save_pretrained(cfg.output_dir)
                                 OmegaConf.save(cfg, os.path.join(cfg.output_dir, "training_config.yaml"))
                                 logger.info("Saving best model checkpoint to %s", cfg.output_dir)
 
@@ -311,12 +312,15 @@ def main(cfg: DictConfig):
     else:
         pretrain_state_dict = None
 
-    tokenizer = AutoTokenizer.from_pretrained(cfg.model_name_or_path)
-    try:
-        model = hydra.utils.call(cfg.model, cfg.model_name_or_path, state_dict=pretrain_state_dict)
-    except Exception as e:
-        logger.warning(e)
-        model = hydra.utils.call(cfg.model)
+    # tokenizer = AutoTokenizer.from_pretrained(cfg.model_name_or_path)
+    # try:
+    #     model = hydra.utils.call(cfg.model, cfg.model_name_or_path, state_dict=pretrain_state_dict)
+    # except Exception as e:
+    #     logger.warning(e)
+    tokenizer = None
+    model: torch.nn.Module = hydra.utils.call(cfg.model)
+    if pretrain_state_dict is not None:
+        model.load_state_dict(pretrain_state_dict)
 
     if cfg.local_rank == 0:
         dist.barrier()  # Make sure only the first process in distributed training will download model & vocab
@@ -336,7 +340,7 @@ def main(cfg: DictConfig):
         OmegaConf.save(cfg, os.path.join(cfg.output_dir, "training_config.yaml"))
 
         wandb.init(
-            project="code-language-reasoning",
+            project="ce7455-imdb-cls",
             name=cfg.exp_name,
             notes=cfg.exp_notes,
             config=OmegaConf.to_container(cfg, resolve=True)
@@ -392,9 +396,10 @@ def main(cfg: DictConfig):
             split = "dev"
 
             if "model_eval" in cfg:
-                model = hydra.utils.call(cfg.model_eval, checkpoint)
+                model = hydra.utils.call(cfg.model_eval)
             else:
-                model = hydra.utils.call(cfg.model, checkpoint)
+                model = hydra.utils.call(cfg.model)
+            model.load_state_dict(torch.load(os.path.join(checkpoint, "pytorch_model.bin"), map_location="cpu"))
             if cfg.n_gpu == 1:
                 model.to(cfg.device)
             else:
