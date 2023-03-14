@@ -260,10 +260,7 @@ def train(cfg, train_dataset, model, tokenizer, continue_from_global_step=0):
                             sub_path = os.path.join(cfg.output_dir, 'checkpoint-{}'.format(global_step))
                             flag = note_best_checkpoint(cfg, results, sub_path)
                             if cfg.save_best and flag:
-                                if cfg.local_rank == 0:
-                                    unwrap_model(model).save_pretrained(cfg.output_dir, state_dict=state_dict)
-                                else:
-                                    model.save_pretrained(cfg.output_dir)
+                                torch.save(model.state_dict(), os.path.join(cfg.output_dir, "pytorch_model.bin"))
 
                                 if tokenizer is not None:
                                     tokenizer.save_pretrained(cfg.output_dir)

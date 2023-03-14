@@ -118,44 +118,55 @@ def initialize_optimizer(cfg: DictConfig, grouped_parameters: List[Dict] = None,
             }
         ]
 
-    if "optimizer" in cfg and cfg.optimizer and 'lamb' in cfg.optimizer:
-        if "bit_training" in cfg and cfg.bit_training:
-            from bitsandbytes.optim import LAMB8bit
+    if "optimizer" in cfg and cfg.optimizer:
+        if "lamb" in cfg.optimizer:
+            if "bit_training" in cfg and cfg.bit_training:
+                from bitsandbytes.optim import LAMB8bit
 
-            optimizer = LAMB8bit(grouped_parameters,
-                                 lr=cfg.learning_rate,
-                                 betas=eval(cfg.adam_betas),
-                                 eps=cfg.adam_epsilon,
-                                 max_unorm=cfg.max_grad_norm)
-        else:
-            if cfg.optimizer == 'fused_lamb':
-                try:
-                    from apex.optimizers.fused_mixed_precision_lamb import FusedMixedPrecisionLamb as FusedLAMB
-                except ImportError:
-                    from apex.optimizers.fused_lamb import FusedLAMB
+                optimizer = LAMB8bit(grouped_parameters,
+                                     lr=cfg.learning_rate,
+                                     betas=eval(cfg.adam_betas),
+                                     eps=cfg.adam_epsilon,
+                                     max_unorm=cfg.max_grad_norm)
             else:
-                from apex.optimizers.fused_lamb import FusedLAMB
+                if cfg.optimizer == 'fused_lamb':
+                    try:
+                        from apex.optimizers.fused_mixed_precision_lamb import FusedMixedPrecisionLamb as FusedLAMB
+                    except ImportError:
+                        from apex.optimizers.fused_lamb import FusedLAMB
+                else:
+                    from apex.optimizers.fused_lamb import FusedLAMB
 
-            optimizer = FusedLAMB(grouped_parameters,
-                                  lr=cfg.learning_rate,
-                                  betas=eval(cfg.adam_betas),
-                                  eps=cfg.adam_epsilon,
-                                  use_nvlamb=(cfg.use_nvlamb if "use_nvlamb" in cfg else False),
-                                  max_grad_norm=cfg.max_grad_norm)
-    elif "optimizer" in cfg and cfg.optimizer and "adafactor" in cfg.optimizer:
-        from transformers.optimization import Adafactor
+                optimizer = FusedLAMB(grouped_parameters,
+                                      lr=cfg.learning_rate,
+                                      betas=eval(cfg.adam_betas),
+                                      eps=cfg.adam_epsilon,
+                                      use_nvlamb=(cfg.use_nvlamb if "use_nvlamb" in cfg else False),
+                                      max_grad_norm=cfg.max_grad_norm)
+        elif "adafactor" in cfg.optimizer:
+            from transformers.optimization import Adafactor
 
-        optimizer = Adafactor(
-            grouped_parameters,
-            lr=cfg.learning_rate,
-            eps=(1e-30, 1e-3),
-            clip_threshold=1.0,
-            beta1=None,
-            weight_decay=0.0,
-            relative_step=False,
-            scale_parameter=False,
-            warmup_init=False
-        )
+            optimizer = Adafactor(
+                grouped_parameters,
+                lr=cfg.learning_rate,
+                eps=(1e-30, 1e-3),
+                clip_threshold=1.0,
+                beta1=None,
+                weight_decay=0.0,
+                relative_step=False,
+                scale_parameter=False,
+                warmup_init=False
+            )
+        elif "sgd" in cfg.optimizer:
+            from torch.optim.sgd import SGD
+
+            optimizer = SGD(grouped_parameters, lr=cfg.learning_rate, momentum=getattr(cfg, "momentum", 0.0))
+        elif "adagrad" in cfg.optimizer:
+            from torch.optim.adagrad import Adagrad
+
+            optimizer = Adagrad(grouped_parameters, lr=cfg.learning_rate)
+        else:
+            raise ValueError(cfg.optimizer)
     else:
         if "bit_training" in cfg and cfg.bit_training:
             from bitsandbytes.optim import AdamW8bit
