@@ -42,9 +42,9 @@ prefetch_factor: 2
 
 # Wiki path pretrain v8.2
 model_name_or_path:
-pretrain:
+pretrain: experiments/imdb_cls.rnn-uni-1.w1.A40.sgd.v1.0.s42/pytorch_model.bin
 
-output_dir: experiments/imdb_cls.rnn-uni-1.w1.A40.sgd.v1.0.s${seed}
+output_dir: experiments/imdb_cls.rnn-uni-1.w1.A40.sgd.v1.0.stage2.s${seed}
 
 do_train: True
 evaluate_during_training: True
@@ -57,7 +57,7 @@ optimizer: sgd
 # Training hyper-parameters
 per_gpu_train_batch_size: 64
 per_gpu_eval_batch_size: 128
-learning_rate: 1e-3
+learning_rate: 1e-4
 lr_scheduler: constant
 gradient_accumulation_steps: 1
 weight_decay: 0.0
@@ -84,7 +84,7 @@ fp16: True
 fp16_opt_level: O1
 
 # Prediction config
-exp_name: imdb_cls.rnn-uni-1.w1.A40.e${num_train_epochs}.sgd.v1.0.s${seed}
+exp_name: imdb_cls.rnn-uni-1.w1.A40.e${num_train_epochs}.sgd.v1.0.stage2.s${seed}
 exp_notes:
 prediction_cfg:
   metric: "acc"
