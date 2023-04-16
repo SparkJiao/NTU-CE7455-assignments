@@ -1,0 +1,121 @@
+hydra:
+  run:
+    dir: ./
+
+train_file: data/train.json
+dev_file: data/val.json
+test_file: data/test.json
+
+vocab_file: data/vocab.json
+
+# Model
+model:
+  _target_: models.seq2seq.EncoderDecoder
+  _recursive_: False
+  encoder:
+    _target_: models.seq2seq.RNNEncoder
+    mode: gru
+    input_size: 512
+    hidden_size: 512
+    num_layers: 1
+    dropout: 0.0
+    bidirectional: False
+  decoder:
+    _target_: models.seq2seq.Decoder
+    mode: gru
+    input_size: 512
+    hidden_size: 512
+    num_layers: 1
+    bidirectional: False
+  vocab_file: ${vocab_file}
+
+# Data loading
+read_tensor:
+  _target_: data.en2fr.Seq2SeqDataset
+  vocab_file: ${vocab_file}
+
+extended_vocab:
+
+# Data collator
+collator:
+  _target_: data.en2fr.Seq2SeqCollator
+  vocab_file: ${vocab_file}
+
+
+# Dataloader
+num_workers: 4
+prefetch_factor: 2
+
+# Wiki path pretrain v8.2
+model_name_or_path:
+pretrain:
+
+exp_name: nmt.gru-uni-1.gru-uni-1.w1.A40.e${num_train_epochs}.v1.0.s${seed}
+exp_notes:
+output_dir: experiments/${exp_name}
+
+do_train: True
+evaluate_during_training: True
+
+do_eval: True
+eval_sub_path:
+
+# Training hyper-parameters
+per_gpu_train_batch_size: 64
+per_gpu_eval_batch_size: 128
+learning_rate: 1e-2
+lr_scheduler: linear
+gradient_accumulation_steps: 1
+weight_decay: 0.0
+adam_epsilon: 1e-6
+adam_betas: "(0.9, 0.98)"
+#adam_betas: "(0.9, 0.999)"
+max_grad_norm: 0.0
+#max_grad_norm: 1.0
+num_train_epochs: 5
+max_steps: 0
+warmup_proportion: 0
+warmup_steps: 0
+
+
+logging_steps: 5
+save_steps: -1
+save_best: True
+eval_steps: 1000
+ddp_eval: True
+no_cuda: False
+seed: 42
+local_rank: -1
+fp16: True
+fp16_opt_level: O1
+
+# Prediction config
+prediction_cfg:
+  metric: "rouge1_fmeasure"
+  measure: 1
+  best_checkpoint:
+  best_result:
+eval_forward_fn:
+  _target_: general_util.evaluator.DefaultForwardFn
+post_process:
+  _target_: post_processors.bleu.RougeMetric
+
+# fairscale.FullyShardedDP
+fairscale_config:
+  _target_: general_util.fsdp_utils.default_initialize
+  fp16: ${fp16}
+  reshard_after_forward: False
+  move_grads_to_cpu: False
+  move_params_to_cpu: False
+
+summary_helper:
+  _target_: general_util.tensorboard_helper.WandbWriter
+  batch_index_or_keys:
+  outputs_index_or_keys:
+
+# Temporary variables
+n_gpu:
+device:
+train_batch_size:
+eval_batch_size:
+world_size:
